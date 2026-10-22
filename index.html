@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>俄罗斯方块</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #12121a; color: #e8e8f0;
+    font-family: system-ui, -apple-system, sans-serif;
+    user-select: none;
+  }
+  h1 { font-size: 18px; margin: 10px 0 6px; letter-spacing: 2px; color: #7ee0ff; }
+  .hud {
+    display: flex; gap: 18px; font-size: 14px;
+    margin-bottom: 8px; color: #a0a0b8;
+  }
+  .hud b { color: #fff; }
+  .wrap { position: relative; }
+  canvas {
+    display: block; border-radius: 8px;
+    background: #1b1b28;
+    box-shadow: 0 0 0 2px #2e2e44, 0 8px 30px rgba(0,0,0,.5);
+  }
+  .overlay {
+    position: absolute; inset: 0;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(10,10,18,.88); border-radius: 8px;
+    text-align: center; padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .overlay h2 { margin: 0 0 8px; font-size: 20px; color: #7ee0ff; }
+  .overlay p { margin: 4px 0; font-size: 14px; color: #b8b8cc; }
+  .overlay button {
+    margin-top: 14px; padding: 10px 26px;
+    border: none; border-radius: 8px; cursor: pointer;
+    background: #3aa8ff; color: #fff; font-size: 15px; font-weight: 600;
+  }
+  .controls {
+    margin-top: 14px; display: grid;
+    grid-template-columns: repeat(4, 62px);
+    gap: 10px; justify-content: center;
+  }
+  .controls button {
+    height: 52px; border: none; border-radius: 10px;
+    background: #26263a; color: #d8d8ea;
+    font-size: 20px; cursor: pointer;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,.3);
+  }
+  .controls button:active { background: #3aa8ff; color: #fff; transform: translateY(1px); }
+  .controls .wide { grid-column: span 2; font-size: 14px; letter-spacing: 1px; }
+  .hint { margin-top: 10px; font-size: 11px; color: #66667a; text-align: center; }
+</style>
+</head>
+<body>
+<h1>俄罗斯方块</h1>
+<div class="hud">
+  <span>分数 <b id="score">0</b></span>
+  <span>行数 <b id="lines">0</b></span>
+  <span>等级 <b id="level">1</b></span>
+</div>
+<div class="wrap">
+  <canvas id="game"></canvas>
+  <div class="overlay" id="overlay">
+    <h2 id="ovTitle">俄罗斯方块</h2>
+    <p id="ovText">点击开始游戏</p>
+    <button id="ovBtn">开始</button>
+  </div>
+</div>
+<div class="controls">
+  <button data-act="left">←</button>
+  <button data-act="rotate">⟳</button>
+  <button data-act="right">→</button>
+  <button data-act="down">↓</button>
+  <button class="wide" data-act="drop">直落</button>
+  <button class="wide" data-act="pause">暂停</button>
+</div>
+<div class="hint">键盘：← → 移动 · ↑ 旋转 · ↓ 加速 · 空格 直落 · P 暂停</div>
+
+<script>
+(function () {
+  const COLS = 10, ROWS = 20;
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  // 根据屏幕自适应方块大小
+  const maxH = Math.min(window.innerHeight * 0.55, 520);
+  const block = Math.floor(Math.min((window.innerWidth - 60) / COLS, maxH / ROWS, 34));
+  const W = COLS * block, H = ROWS * block;
+  canvas.width = W; canvas.height = H;
+
+  const scoreEl = document.getElementById('score');
+  const linesEl = document.getElementById('lines');
+  const levelEl = document.getElementById('level');
+  const overlay = document.getElementById('overlay');
+  const ovTitle = document.getElementById('ovTitle');
+  const ovText = document.getElementById('ovText');
+  const ovBtn = document.getElementById('ovBtn');
+
+  const SHAPES = {
+    I: [[1,1,1,1]],
+    O: [[1,1],[1,1]],
+    T: [[0,1,0],[1,1,1]],
+    S: [[0,1,1],[1,1,0]],
+    Z: [[1,1,0],[0,1,1]],
+    J: [[1,0,0],[1,1,1]],
+    L: [[0,0,1],[1,1,1]]
+  };
+  const COLORS = {
+    I: '#38d9d9', O: '#f0d43a', T: '#b26bf0',
+    S: '#4ade80', Z: '#f45b69', J: '#5b8df4', L: '#f59e4b'
+  };
+  const KEYS = Object.keys(SHAPES);
+
+  let board, cur, next, score, lines, level, dropTimer, dropInterval, running, paused, gameOver;
+
+  function emptyBoard() {
+    return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  }
+
+  function newPiece() {
+    const type = KEYS[Math.floor(Math.random() * KEYS.length)];
+    const shape = SHAPES[type].map(r => r.slice());
+    return {
+      type, shape, color: COLORS[type],
+      x: Math.floor((COLS - shape[0].length) / 2),
+      y: 0
+    };
+  }
+
+  function collide(p) {
+    for (let y = 0; y < p.shape.length; y++) {
+      for (let x = 0; x < p.shape[y].length; x++) {
+        if (!p.shape[y][x]) continue;
+        const bx = p.x + x, by = p.y + y;
+        if (bx < 0 || bx >= COLS || by >= ROWS) return true;
+        if (by >= 0 && board[by][bx]) return true;
+      }
+    }
+    return false;
+  }
+
+  function rotate(shape) {
+    const h = shape.length, w = shape[0].length;
+    const res = Array.from({ length: w }, () => Array(h).fill(0));
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++)
+        res[x][h - 1 
