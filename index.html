@@ -64,14 +64,13 @@
   const block = Math.floor(Math.min((window.innerWidth - 60) / COLS, maxH / ROWS, 34));
   const W = COLS * block, H = ROWS * block;
   canvas.width = W; canvas.height = H;
+  
   const scoreEl = document.getElementById('score');
   const highScoreEl = document.getElementById('highScore');
   const linesEl = document.getElementById('lines');
-  const levelEl = document.getElementById('level');
   const startScreen = document.getElementById('startScreen');
   const startBtn = document.getElementById('startBtn');
 
-  // 读取历史最高分
   let highScore = parseInt(localStorage.getItem('tetris_high_score')) || 0;
   highScoreEl.textContent = highScore;
 
@@ -83,6 +82,7 @@
     [587, 1], [698, 1], [880, 1], [784, 1], [698, 1], [659, 1], [523, 1], [659, 1], [587, 1], [523, 1], [494, 1], [494, 1], [523, 1], [587, 1], [659, 1], [523, 1], [440, 1], [440, 1], [0, 1]
   ];
   let melodyIndex = 0;
+  
   function playNote(freq, duration) {
     if (freq === 0) return;
     const osc = audioCtx.createOscillator();
@@ -109,6 +109,7 @@
   const SHAPES = { I: [[1,1,1,1]], O: [[1,1],[1,1]], T: [[0,1,0],[1,1,1]], S: [[0,1,1],[1,1,0]], Z: [[1,1,0],[0,1,1]], J: [[1,0,0],[1,1,1]], L: [[0,0,1],[1,1,1]] };
   const COLORS = { I: '#38d9d9', O: '#f0d43a', T: '#b26bf0', S: '#4ade80', Z: '#f45b69', J: '#5b8df4', L: '#f59e4b' };
   const KEYS = Object.keys(SHAPES);
+  
   let board, cur, next, score, lines, level, dropTimer, dropInterval, running, paused, gameOver;
   function emptyBoard() { return Array.from({ length: ROWS }, () => Array(COLS).fill(null)); }
 function newPiece() {
@@ -132,6 +133,7 @@ function rotate(shape) {
   return res;
 }
 function merge(p) { p.shape.forEach((row, y) => row.forEach((v, x) => { if (v && p.y + y >= 0) board[p.y + y][p.x + x] = p.color; })); }
+
 function clearLines() {
   let cleared = 0;
   for (let y = ROWS - 1; y >= 0; y--) {
@@ -141,8 +143,6 @@ function clearLines() {
     score += [0, 100, 300, 500, 800][cleared] * level;
     lines += cleared; level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(120, 800 - (level - 1) * 70);
-    
-    // 更新最高分
     if (score > highScore) {
       highScore = score;
       localStorage.setItem('tetris_high_score', highScore);
@@ -151,18 +151,22 @@ function clearLines() {
     updateHUD();
   }
 }
-function updateHUD() { scoreEl.textContent = score; linesEl.textContent = lines; levelEl.textContent = level; }
+
+function updateHUD() { scoreEl.textContent = score; linesEl.textContent = lines; }
+
 function drawCell(x, y, color, size) {
   const s = size || block, px = x * s, py = y * s;
   ctx.fillStyle = color; ctx.fillRect(px + 1, py + 1, s - 2, s - 2);
   ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(px + 1, py + 1, s - 2, 3);
   ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fillRect(px + 1, py + s - 4, s - 2, 3);
 }
+
 function drawGrid() {
   ctx.strokeStyle = 'rgba(255,255,255,.045)'; ctx.lineWidth = 1;
   for (let x = 1; x < COLS; x++) { ctx.beginPath(); ctx.moveTo(x * block, 0); ctx.lineTo(x * block, H); ctx.stroke(); }
   for (let y = 1; y < ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y * block); ctx.lineTo(W, y * block); ctx.stroke(); }
 }
+
 function drawGhost() {
   if (!cur) return;
   const ghost = { ...cur, shape: cur.shape };
@@ -173,6 +177,7 @@ function drawGhost() {
     ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1.5; ctx.strokeRect(px + 2, py + 2, block - 4, block - 4);
   }));
 }
+
 function draw() {
   ctx.clearRect(0, 0, W, H); drawGrid();
   board.forEach((row, y) => row.forEach((c, x) => { if (c) drawCell(x, y, c); }));
@@ -183,17 +188,21 @@ function draw() {
     cur = next || newPiece(); next = newPiece();
     if (collide(cur)) {
       gameOver = true; running = false;
-      alert('游戏结束！\n本次得分：' + score + '\n历史最高：' + highScore);
-      startScreen.classList.remove('hidden');
-      startBtn.textContent = '🔄 重新开始';
+      setTimeout(() => {
+        alert('游戏结束！\n本次得分：' + score + '\n历史最高：' + highScore);
+        startScreen.classList.remove('hidden');
+        startBtn.textContent = '🔄 重新开始';
+      }, 100);
     }
   }
+  
   function step() {
     if (!running || paused || gameOver) return;
     const moved = { ...cur, y: cur.y + 1 };
     if (collide(moved)) { merge(cur); clearLines(); spawn(); } else { cur = moved; }
     draw();
   }
+  
   function loop(ts) {
     if (!running) return;
     if (!paused && !gameOver) {
@@ -202,6 +211,7 @@ function draw() {
     }
     requestAnimationFrame(loop);
   }
+
   function move(dx) { if (!running || paused || gameOver) return; const p = { ...cur, x: cur.x + dx }; if (!collide(p)) { cur = p; draw(); } }
   function doRotate() { if (!running || paused || gameOver) return; const shape = rotate(cur.shape); for (const off of [0, -1, 1, -2, 2]) { const p = { ...cur, shape, x: cur.x + off }; if (!collide(p)) { cur = p; draw(); return; } } }
   function softDrop() { if (!running || paused || gameOver) return; step(); }
@@ -251,6 +261,7 @@ function draw() {
     musicBtn.textContent = isMusicPlaying ? '🔇 暂停音乐' : '🎵 播放音乐';
   });
 
+  // 将“开始”按钮与游戏启动真正绑定（之前崩溃的就是这里）
   startBtn.addEventListener('click', start);
 
   // 页面加载后先绘制空网格
