@@ -83,12 +83,12 @@
 <div class="hint">键盘：← → 移动 · ↑ 旋转 · ↓ 加速 · 空格 直落 · P 暂停</div>
 
 <script>
-(function () {
+ 
+ (function () {
   const COLS = 10, ROWS = 20;
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
-  // 根据屏幕自适应方块大小
   const maxH = Math.min(window.innerHeight * 0.55, 520);
   const block = Math.floor(Math.min((window.innerWidth - 60) / COLS, maxH / ROWS, 34));
   const W = COLS * block, H = ROWS * block;
@@ -103,13 +103,9 @@
   const ovBtn = document.getElementById('ovBtn');
 
   const SHAPES = {
-    I: [[1,1,1,1]],
-    O: [[1,1],[1,1]],
-    T: [[0,1,0],[1,1,1]],
-    S: [[0,1,1],[1,1,0]],
-    Z: [[1,1,0],[0,1,1]],
-    J: [[1,0,0],[1,1,1]],
-    L: [[0,0,1],[1,1,1]]
+    I: [[1,1,1,1]], O: [[1,1],[1,1]], T: [[0,1,0],[1,1,1]],
+    S: [[0,1,1],[1,1,0]], Z: [[1,1,0],[0,1,1]],
+    J: [[1,0,0],[1,1,1]], L: [[0,0,1],[1,1,1]]
   };
   const COLORS = {
     I: '#38d9d9', O: '#f0d43a', T: '#b26bf0',
@@ -119,18 +115,12 @@
 
   let board, cur, next, score, lines, level, dropTimer, dropInterval, running, paused, gameOver;
 
-  function emptyBoard() {
-    return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-  }
+  function emptyBoard() { return Array.from({ length: ROWS }, () => Array(COLS).fill(null)); }
 
   function newPiece() {
     const type = KEYS[Math.floor(Math.random() * KEYS.length)];
     const shape = SHAPES[type].map(r => r.slice());
-    return {
-      type, shape, color: COLORS[type],
-      x: Math.floor((COLS - shape[0].length) / 2),
-      y: 0
-    };
+    return { type, shape, color: COLORS[type], x: Math.floor((COLS - shape[0].length) / 2), y: 0 };
   }
 
   function collide(p) {
@@ -148,6 +138,92 @@
   function rotate(shape) {
     const h = shape.length, w = shape[0].length;
     const res = Array.from({ length: w }, () => Array(h).fill(0));
-    for (let y = 0; y < h; y++)
-      for (let x = 0; x < w; x++)
-        res[x][h - 1 
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) res[x][h - 1 - y] = shape[y][x];
+    return res;
+  }
+
+  function merge(p) {
+    p.shape.forEach((row, y) => row.forEach((v, x) => {
+      if (v && p.y + y >= 0) board[p.y + y][p.x + x] = p.color;
+    }));
+  }
+
+  function clearLines() {
+    let cleared = 0;
+    for (let y = ROWS - 1; y >= 0; y--) {
+      if (board[y].every(c => c)) {
+        board.splice(y, 1); board.unshift(Array(COLS).fill(null)); cleared++; y++;
+      }
+    }
+    if (cleared) {
+      score += [0, 100, 300, 500, 800][cleared] * level;
+      lines += cleared; level = Math.floor(lines / 10) + 1;
+      dropInterval = Math.max(120, 800 - (level - 1) * 70);
+      updateHUD();
+    }
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = score; linesEl.textContent = lines; levelEl.textContent = level;
+  }
+
+  function drawCell(x, y, color, size) {
+    const s = size || block, px = x * s, py = y * s;
+    ctx.fillStyle = color; ctx.fillRect(px + 1, py + 1, s - 2, s - 2);
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(px + 1, py + 1, s - 2, 3);
+    ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fillRect(px + 1, py + s - 4, s - 2, 3);
+  }
+
+  function drawGrid() {
+    ctx.strokeStyle = 'rgba(255,255,255,.045)'; ctx.lineWidth = 1;
+    for (let x = 1; x < COLS; x++) { ctx.beginPath(); ctx.moveTo(x * block, 0); ctx.lineTo(x * block, H); ctx.stroke(); }
+    for (let y = 1; y < ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y * block); ctx.lineTo(W, y * block); ctx.stroke(); }
+  }
+
+  function drawGhost() {
+    if (!cur) return;
+    const ghost = { ...cur, shape: cur.shape };
+    while (!collide({ ...ghost, y: ghost.y + 1 })) ghost.y++;
+    ghost.shape.forEach((row, y) => row.forEach((v, x) => {
+      if (!v) return;
+      const px = (ghost.x + x) * block, py = (ghost.y + y) * block;
+      ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(px + 2, py + 2, block - 4, block - 4);
+    }));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H); drawGrid();
+    board.forEach((row, y) => row.forEach((c, x) => { if (c) drawCell(x, y, c); }));
+    drawGhost();
+    if (cur) cur.shape.forEach((row, y) => row.forEach((v, x) => {
+      if (v && cur.y + y >= 0) drawCell(cur.x + x, cur.y + y, cur.color);
+    }));
+  }
+
+  function spawn() {
+    cur = next || newPiece(); next = newPiece();
+    if (collide(cur)) {
+      gameOver = true; running = false;
+      showOverlay('游戏结束', '得分：' + score + '　行数：' + lines, '再来一局');
+    }
+  }
+
+  function step() {
+    if (!running || paused || gameOver) return;
+    const moved = { ...cur, y: cur.y + 1 };
+    if (collide(moved)) { merge(cur); clearLines(); spawn(); } else { cur = moved; }
+    draw();
+  }
+
+  function loop(ts) {
+    if (!running) return;
+    if (!paused && !gameOver) {
+      if (!dropTimer) dropTimer = ts;
+      if (ts - dropTimer > dropInterval) { dropTimer = ts; step(); }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function move(dx) {
+    if (!r
