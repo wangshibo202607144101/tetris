@@ -89,7 +89,8 @@
   const ctx = canvas.getContext('2d');
 
   const maxH = Math.min(window.innerHeight * 0.55, 520);
-  const block = Math.floor(Math.min((window.innerWidth - 60) / COLS, maxH / ROWS, 34));
+  let block = Math.floor((window.innerWidth - 40) / COLS);
+if (block > 34) block = 34;
   const W = COLS * block, H = ROWS * block;
   canvas.width = W; canvas.height = H;
 
