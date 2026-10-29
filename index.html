@@ -55,7 +55,17 @@
   <button class="wide" data-act="pause">暂停/继续</button>
 </div>
 <div class="hint">手机：滑动屏幕或点按钮 · 电脑：方向键</div>
-<script>
+<div style="margin-top: 20px; text-align: center;">
+  <p style="font-size: 14px; color: #a0a0b8; margin-bottom: 8px;">给这个游戏打个分吧：</p>
+  <div id="stars" style="font-size: 30px; color: #555; cursor: pointer; user-select: none;">
+    <span data-val="1">★</span>
+    <span data-val="2">★</span>
+    <span data-val="3">★</span>
+    <span data-val="4">★</span>
+    <span data-val="5">★</span>
+  </div>
+</div>
+ <script>
  (function () {
   const COLS = 10, ROWS = 20;
   const canvas = document.getElementById('game');
@@ -263,7 +273,25 @@ function draw() {
 
   // 将“开始”按钮与游戏启动真正绑定（之前崩溃的就是这里）
   startBtn.addEventListener('click', start);
-
+// 评分系统逻辑
+const stars = document.querySelectorAll('#stars span');
+stars.forEach(star => {
+  star.addEventListener('click', function() {
+    const val = parseInt(this.getAttribute('data-val'));
+    
+    // 点亮星星颜色
+    stars.forEach(s => {
+      if (parseInt(s.getAttribute('data-val')) <= val) {
+        s.style.color = '#f0d43a'; // 金色
+      } else {
+        s.style.color = '#555'; // 灰色
+      }
+    });
+    
+    // 提示打分成功
+    alert('感谢你的评分！你给了 ' + val + ' 星');
+  });
+});
   // 页面加载后先绘制空网格
   board = emptyBoard();
   drawGrid();
